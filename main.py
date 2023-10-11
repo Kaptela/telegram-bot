@@ -26,29 +26,33 @@ def start(message):
 def bookCategory(message):
     if message.text == 'Книги на английском 📚':
         bookCategory = types.ReplyKeyboardMarkup()
-        btn1 = types.KeyboardButton('Книга 1')
-        btn2 = types.KeyboardButton('Книга 2')
+        btn1 = types.KeyboardButton('Alwyn Cox - Dangerous Journey')
+        btn2 = types.KeyboardButton('Arthur Conan Doyle - Sherlock Holmes and the Sport of Kings')
         bookCategory.row(btn1, btn2)
-        btn3 = types.KeyboardButton('Книга 3')
-        btn4 = types.KeyboardButton('Книга 4')
+        btn3 = types.KeyboardButton('Atomic Habits James Clear')
+        btn4 = types.KeyboardButton("Breakfast At Tiffany's")
         bookCategory.row(btn3, btn4)
-        btn5 = types.KeyboardButton('Книга 5')
-        btn6 = types.KeyboardButton('Книга 6')
+        btn5 = types.KeyboardButton('Harry Potter and the Sorcerers Stone')
+        btn6 = types.KeyboardButton('The Fault in Our Stars')
         bookCategory.row(btn5, btn6)
         back = types.KeyboardButton('Назад')
         bookCategory.row(back)
         bot.send_message(message.chat.id, 'Материал для практики', reply_markup=bookCategory)
 
-    elif message.text == 'Книга 1':
-        pass
-    elif message.text == 'Книга 2':
-        pass
-    elif message.text == 'Книга 3':
-        pass
-    elif message.text == 'Книга 4':
-        pass
-    elif message.text == 'Книга 5':
-        pass
+    elif message.text == 'Alwyn Cox - Dangerous Journey':
+        bot.send_document(message.chat.id, open('books/Alwyn Cox - Dangerous Journey.pdf', 'rb'))
+
+    elif message.text == 'Arthur Conan Doyle - Sherlock Holmes and the Sport of Kings':
+        bot.send_document(message.chat.id, open('books/Arthur Conan Doyle - Sherlock Holmes and the Sport of Kings.pdf', 'rb'))
+    elif message.text == 'Atomic Habits James Clear':
+        bot.send_document(message.chat.id, open('books/Atomic Habits James Clear.pdf', 'rb'))
+    elif message.text == "Breakfast At Tiffany's":
+        bot.send_document(message.chat.id, open("books/Breakfast At Tiffany's.pdf", 'rb'))
+    elif message.text == 'Harry Potter and the Sorcerer\'s Stone':
+        bot.send_document(message.chat.id, open('books/Harry Potter and the Sorcerer\'s Stone.pdf', 'rb'))
+    elif message.text == 'The Fault in Our Stars':
+        bot.send_document(message.chat.id, open('books/The Fault in Our Stars.pdf', 'rb'))
+
     elif message.text == 'Назад':
         mainMenu = types.ReplyKeyboardMarkup(row_width=2)
         btn1 = types.KeyboardButton('Книги на английском 📚')
