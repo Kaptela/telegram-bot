@@ -7,7 +7,8 @@ from PIL import Image
 from dotenv import load_dotenv
 from app.functions.text_detection import detect_text
 from app.functions.admin import is_admin
-
+from app.functions.user import is_authenticated, has_group
+from app.database.sqls import Database 
 load_dotenv()
 
 # SETTINGS
@@ -105,9 +106,21 @@ def user(message):
         bot.send_document(message.chat.id, open('6 week study plan.pdf', 'rb'))
     elif message.text == 'Запись на speaking club SAYra':
         options = types.ReplyKeyboardMarkup(row_width=2)
-        
-    
-    
+        btns = {}
+
+        CoursesFromDb = Database.getAvailableTimes()
+        if not CoursesFromDb:
+            bot.send_message(message.chat.id, 'Доступных дат пока что нету!\nЗагляните позже')
+            return
+        for course in CoursesFromDb:
+            btnText = f'{course["grou_id"]} - {course["day_of_the_week"]}, {course["time"]}, {course["duration"]}'
+            btn = types.KeyboardButton(btnText)
+            btns[btnText] = course
+            options.row(btn)
+        back = types.KeyboardButton('Назад')
+        options.row(back)
+        msg = bot.send_message(message.chat.id, 'Выберите удобное для вас время', reply_markup=options)
+        bot.register_next_step_handler(msg, registerUserToSpeakingClub, kwargs=btns)
     elif message.text == 'Выйти с панели администратора':
         if not is_admin(message):
             bot.send_message(message.chat.id, "You don't have permission to run this command")
@@ -126,6 +139,17 @@ def user(message):
             bot.send_message(message.chat.id, "You don't have permission to run this command")
             return
         bot.send_message(message.chat.id, 'В разработке')
+
+def registerUserToSpeakingClub(message, **kwargs:dict):
+    usersTelegram = f'@{message.from_user.username}'
+    if has_group(usersTelegram):
+       bot.send_message(message.chat.id, 'You are already registered to speaking club') 
+       return
+    text = message.text
+    course = kwargs['kwargs'][text]
+    Database.registerUserToGroup(telegram=usersTelegram, group_id=course['grou_id'])
+    bot.send_message(message.chat.id, f'Вы успешно зарегистрировались на спикинг клаб\nС нетерпением ждем вас в {course["time"]}')
+    return
 
 
 def check_essay(message):
