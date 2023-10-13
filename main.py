@@ -1,17 +1,26 @@
 import telebot
-from telebot import types
-import pytesseract
-from PIL import Image
 import os
 import openai
 import sqlite3
+from telebot import types
+from PIL import Image
+from dotenv import load_dotenv
+from app.functions.text_detection import detect_text
+from app.functions.admin import is_admin
+
+load_dotenv()
+
+# SETTINGS
+OPENAI_KEY = os.getenv('OPENAI_KEY')
+TELEGRAM_BOT_KEY = os.getenv('TELEGRAM_BOT_KEY')
+openai.api_key = OPENAI_KEY
+bot = telebot.TeleBot(TELEGRAM_BOT_KEY)
+
 
 messages = []
 system_msg = 'Imagine that you are a writing ielts examiner'
 messages.append({"role": "system", "content": system_msg})
-openai.api_key = "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"
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-bot = telebot.TeleBot('6697433375:AAGsMB4aQ7hpQ6SLJ7Xj4TEoaoYwP3c006U')
+
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -31,8 +40,20 @@ def start(message):
     mainMenu.add(btn1, btn2, btn3, btn4, btn5, btn6)
     bot.send_message(message.chat.id, 'Привет', reply_markup=mainMenu)
 
+@bot.message_handler(commands=['admin'])
+def adminCommands(message):
+    if is_admin(message):
+        mainMenu = types.ReplyKeyboardMarkup(row_width=2)
+        btn1 = types.KeyboardButton('Проверить запись на спикинг клаб')
+        btn2 = types.KeyboardButton('Выйти с панели администратора')
+        mainMenu.add(btn1, btn2)
+        bot.send_message(message.chat.id, 'Вы вошли на панель администратора', reply_markup=mainMenu)
+    else:
+        bot.send_message(message.chat.id, "You don't have permission to run this command")
+
+    
 @bot.message_handler(content_types=['text'])
-def bookCategory(message):
+def user(message):
     if message.text == 'Книги на английском 📚':
         bookCategory = types.ReplyKeyboardMarkup()
         btn1 = types.KeyboardButton('Alwyn Cox - Dangerous Journey')
@@ -47,10 +68,8 @@ def bookCategory(message):
         back = types.KeyboardButton('Назад')
         bookCategory.row(back)
         bot.send_message(message.chat.id, 'Материал для практики', reply_markup=bookCategory)
-
     elif message.text == 'Alwyn Cox - Dangerous Journey':
         bot.send_document(message.chat.id, open('books/Alwyn Cox - Dangerous Journey.pdf', 'rb'))
-
     elif message.text == 'Arthur Conan Doyle - Sherlock Holmes and the Sport of Kings':
         bot.send_document(message.chat.id, open('books/Arthur Conan Doyle - Sherlock Holmes and the Sport of Kings.pdf', 'rb'))
     elif message.text == 'Atomic Habits James Clear':
@@ -61,7 +80,6 @@ def bookCategory(message):
         bot.send_document(message.chat.id, open('books/Harry Potter and the Sorcerer\'s Stone.pdf', 'rb'))
     elif message.text == 'The Fault in Our Stars':
         bot.send_document(message.chat.id, open('books/The Fault in Our Stars.pdf', 'rb'))
-
     elif message.text == 'Назад':
         mainMenu = types.ReplyKeyboardMarkup(row_width=2)
         btn1 = types.KeyboardButton('Книги на английском 📚')
@@ -72,7 +90,6 @@ def bookCategory(message):
         btn6 = types.KeyboardButton('Запись на speaking club SAYra')
         mainMenu.add(btn1, btn2, btn3, btn4, btn5, btn6)
         bot.send_message(message.chat.id, 'Главная страница', reply_markup=mainMenu)
-
     elif message.text == 'Задать вопрос':
         markup = types.InlineKeyboardMarkup()
         redirectButton = types.InlineKeyboardButton('Перейти', url='https://t.me/theycallmearuka')
@@ -87,39 +104,69 @@ def bookCategory(message):
     elif message.text == 'IELTS 6 week study plan 🌟':
         bot.send_document(message.chat.id, open('6 week study plan.pdf', 'rb'))
     elif message.text == 'Запись на speaking club SAYra':
-        pass
+        options = types.ReplyKeyboardMarkup(row_width=2)
+        
+    
+    
+    elif message.text == 'Выйти с панели администратора':
+        if not is_admin(message):
+            bot.send_message(message.chat.id, "You don't have permission to run this command")
+            return
+        mainMenu = types.ReplyKeyboardMarkup(row_width=2)
+        btn1 = types.KeyboardButton('Книги на английском 📚')
+        btn2 = types.KeyboardButton('Задать вопрос')
+        btn3 = types.KeyboardButton('Проверка эссе 📝')
+        btn4 = types.KeyboardButton('Запись на консультацию по курсу IELTS')
+        btn5 = types.KeyboardButton('IELTS 6 week study plan 🌟')
+        btn6 = types.KeyboardButton('Запись на speaking club SAYra')
+        mainMenu.add(btn1, btn2, btn3, btn4, btn5, btn6)
+        bot.send_message(message.chat.id, 'Главная страница', reply_markup=mainMenu)
+    elif message.text == 'Проверить запись на спикинг клаб':
+        if not is_admin(message):
+            bot.send_message(message.chat.id, "You don't have permission to run this command")
+            return
+        bot.send_message(message.chat.id, 'В разработке')
+
 
 def check_essay(message):
     if message.content_type == 'text':
         text = message.text
-        messages.append({"role": "user", "content": text + "\n You should highlight the candidate's shortcomings and strong qualities, "
-                                                           "make suggestions for improvement, and provide an honest IELTS Writing score."})
+        analyzing_message = bot.send_message(message.chat.id, 'Analyzing essay...')
+        user_messages = [{"role": "user", "content": text + "\n You should highlight the candidate's shortcomings and strong qualities, "
+                                                           "make suggestions for improvement, and provide an honest IELTS Writing score."}]
         response = openai.ChatCompletion.create(
             model="gpt-4",
-            messages=messages)
+            messages=user_messages
+        )
         reply = response["choices"][0]["message"]["content"]
-        messages.append({"role": "assistant", "content": reply})
-        bot.send_message(message.chat.id, reply)
-
+        bot.edit_message_text(chat_id=message.chat.id, message_id=analyzing_message.message_id, text=reply)
     elif message.content_type == 'photo':
+        analyzing_message = bot.send_message(message.chat.id, 'Analyzing essay...')
         file_id = message.photo[-1].file_id
         file_info = bot.get_file(file_id)
         file = bot.download_file(file_info.file_path)
 
         with open('temp_essay.jpg', 'wb') as f:
             f.write(file)
-        text = pytesseract.image_to_string(Image.open('temp_essay.jpg'), lang='eng', config=r'--oem 3 --psm 6')
-        print(text)
+
+        detected_text = detect_text('temp_essay.jpg')
+        
+        print(detected_text)
+
         os.remove('temp_essay.jpg')
-        messages.append({"role": "user", "content": text + "\n You should highlight the candidate's shortcomings and strong qualities, "
-                                                           "make suggestions for improvement, and provide an honest IELTS Writing score."})
+
+        messages.append({"role": "user", "content": detected_text + "\n You should highlight the candidate's shortcomings and strong qualities, "
+                                                        "make suggestions for improvement, and provide an honest IELTS Writing score."})
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=messages)
         reply = response["choices"][0]["message"]["content"]
         messages.append({"role": "assistant", "content": reply})
-        # Отправьте результат проверки
-        bot.send_message(message.chat.id, reply)
+
+        bot.edit_message_text(chat_id=message.chat.id, message_id=analyzing_message.message_id, text=reply)
+
+
+
 
 
 bot.polling(none_stop=True)
