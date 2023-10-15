@@ -123,7 +123,6 @@ class Database:
         cursor.close()
         return toreturn
 
-
     # DONE
     @staticmethod
     def registerUserToGroup(telegram: str, group_id: int, limit='', order=''):
@@ -166,8 +165,6 @@ class Database:
 
         return entered_values
 
-    
-
     # DONE
     @staticmethod
     def registerUser(name:str, surname:str, phone:str, telegram:str):
@@ -209,34 +206,18 @@ class Database:
 
         return entered_values
 
-
     # DONE
     @staticmethod
-    def is_authenticated(telegram:str):
-        toreturn = []
+    def is_authenticated(telegram: str):
         Database.connect()
         cursor = Database._connection.cursor()
-        query = f'SELECT u.id, u.name, u.surname, u.phone, u.telegram, g.group_name FROM users AS u JOIN speaking_club_group AS g ON u.group = g.id WHERE telegram = \'{telegram}\''
+        query = f'SELECT u.id FROM users AS u WHERE u.telegram = \'{telegram}\''
         cursor.execute(query)
-        results = cursor.fetchall()
-        if results:
-            for row in results:
-                final = {
-                    "id" : row[0],
-                    'name' : row[1],
-                    'surname' : row[2],
-                    'phone' : row[3],
-                    'telegram' : row[4],
-                    'group' : row[5]
-                }
-                toreturn.append(final)
-        else:
-            return False
-
+        result = cursor.fetchone()
         cursor.close()
         
-        return True
-    
+        return result is not None
+
     @staticmethod
     def has_group(telegram:str):
         toreturn = None
@@ -257,11 +238,9 @@ class Database:
                 }
                 toreturn = final
         else:
-            # print(toreturn['group'])
             return False
 
         cursor.close()
-        print(toreturn)
         if toreturn['group'] == None:
             return False
 
@@ -311,7 +290,96 @@ class Database:
 
         return entered_values
 
+    @staticmethod
+    def saveQuestionFromUser(user: str, question_subject: str, question: str, date):
+        Database.connect()
+        cursor = Database._connection.cursor()
+        query = f"INSERT INTO QandA (\"user\", question_subject, question, question_date) " \
+                f"VALUES (%s, %s, %s, %s) RETURNING *"
 
+        cursor.execute(query, (user, question_subject, question, date))
 
-# print(Database.registerUser(input('Enter your name; '), input('Enter your surname: '), input('Enter your phone'), input('Enter your telegram: ')))
-print(Database.has_group('@Kaptela'))
+        result = cursor.fetchone()
+
+        Database._connection.commit()
+        cursor.close()
+
+        entered_values = {
+            "user": result[0], 
+            "question_subject": result[1],
+            "question": result[2],
+            "date": result[3]
+        }
+
+        return entered_values
+
+    @staticmethod
+    def getUsersIdByUsername(username:str):
+        toreturn = []
+        Database.connect()
+        cursor = Database._connection.cursor()
+        query = f"SELECT u.id FROM users as u WHERE u.telegram = '{username}'"  # Select only the columns you need
+        cursor.execute(query)
+        results = cursor.fetchall()
+        if results:
+            for row in results:
+                final = {
+                    "id" : row[0],
+                }
+                toreturn.append(final)
+        else:
+            return AssertionError('No user')
+
+        cursor.close()
+        return toreturn
+
+    @staticmethod
+    def getAllUsersRegisteredSpeakingClub():
+        toreturn = []
+        Database.connect()
+        cursor = Database._connection.cursor()
+        query =     f"SELECT DISTINCT scg.group_name, u.telegram, s.day_of_the_week, s.time "\
+                    f"FROM \"users\" u "\
+                    f"JOIN speaking_club_group scg ON u.\"group\" = scg.id " \
+                    f"JOIN speaking_club_group__schedule scg_s ON scg.id = scg_s.\"group\" " \
+                    f"JOIN schedule s ON scg_s.schedule = s.id;"
+        cursor.execute(query)
+        results = cursor.fetchall()
+        if results:
+            for row in results:
+                final = {
+                    "group" : row[0],
+                    "telegram" : row[1],
+                    "day of the week" : row[2],
+                    "time" : row[3]
+                }
+                toreturn.append(final)
+        else:
+            return AssertionError('No user')
+
+        cursor.close()
+        return toreturn
+    
+    @staticmethod
+    def getAllQuestionsAboutIelts():
+        toreturn = []
+        Database.connect()
+        cursor = Database._connection.cursor()
+        query = f"select qa.user, qa.question_subject, qa.question, TO_CHAR(qa.question_date, 'DD Mon YYYY HH:MI AM') AS date from QandA as qa;"
+        cursor.execute(query)
+        results = cursor.fetchall()
+        if results:
+            for row in results:
+                final = {
+                    "user" : row[0],
+                    "question_subject" : row[1],
+                    "question" : row[2],
+                    "date" : row[3]
+                }
+                toreturn.append(final)
+        else:
+            return
+
+        cursor.close()
+        return toreturn
+# print(Database.getAllUsersRegisteredSpeakingClub())

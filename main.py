@@ -1,36 +1,19 @@
-import telebot
-import os
-import openai
-import sqlite3
 from telebot import types
-from PIL import Image
 from dotenv import load_dotenv
-from app.functions.text_detection import detect_text
 from app.functions.admin import is_admin
-from app.functions.user import is_authenticated, has_group
-from app.database.sqls import Database 
+from app.functions.user import is_authenticated
+from app.database.sqls import Database
+from app.next_step_handlers.registerUserToSpeakingClub import registerUserToSpeakingClub
+from app.next_step_handlers.check_essay import check_essay
+from app.next_step_handlers.askQuestionAboutIelts import getQuestionSubject, getQuestion
+from app.next_step_handlers.RegisterUser import getFirstName
+from bot import bot
+import datetime
+
 load_dotenv()
-
-# SETTINGS
-OPENAI_KEY = os.getenv('OPENAI_KEY')
-TELEGRAM_BOT_KEY = os.getenv('TELEGRAM_BOT_KEY')
-openai.api_key = OPENAI_KEY
-bot = telebot.TeleBot(TELEGRAM_BOT_KEY)
-
-
-messages = []
-system_msg = 'Imagine that you are a writing ielts examiner'
-messages.append({"role": "system", "content": system_msg})
-
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    # conn = sqlite3.connect('studywitharuzhan.sql')
-    # cur = conn.cursor()
-    # conn.commit()
-    # cur.close()
-    # conn.close()
-    # cur.execute('') # Создание таблицы
     mainMenu = types.ReplyKeyboardMarkup(row_width=2)
     btn1 = types.KeyboardButton('Книги на английском 📚')
     btn2 = types.KeyboardButton('Задать вопрос')
@@ -46,8 +29,9 @@ def adminCommands(message):
     if is_admin(message):
         mainMenu = types.ReplyKeyboardMarkup(row_width=2)
         btn1 = types.KeyboardButton('Проверить запись на спикинг клаб')
-        btn2 = types.KeyboardButton('Выйти с панели администратора')
-        mainMenu.add(btn1, btn2)
+        btn2 = types.KeyboardButton('Проверить вопросы по курсу IELTS')
+        logout = types.KeyboardButton('Выйти с панели администратора')
+        mainMenu.add(btn1, btn2, logout)
         bot.send_message(message.chat.id, 'Вы вошли на панель администратора', reply_markup=mainMenu)
     else:
         bot.send_message(message.chat.id, "You don't have permission to run this command")
@@ -101,10 +85,27 @@ def user(message):
         msg = bot.send_message(message.chat.id, "Пожалуйста, отправьте текст вашего эссе или его фотографию.")
         bot.register_next_step_handler(msg, check_essay)
     elif message.text == 'Запись на консультацию по курсу IELTS':
-        pass
+        options = types.ReplyKeyboardMarkup(row_width=2)
+        back = types.KeyboardButton('Назад')
+        options.row(back)
+        msq = bot.send_message(message.chat.id, 
+            '*Провила задавания вопроса*:\n'
+            '_Вопрос не должен отходить от темы_\n'
+            '\n',
+            parse_mode='Markdown'
+        )
+        msg = bot.send_message(message.chat.id, 'Напишите тему вопроса: ')
+        bot.register_next_step_handler(msg, getQuestionSubject)  # No need to store it in a variable
+        user = f"@{message.from_user.username}"
+        date = datetime.datetime.now()
     elif message.text == 'IELTS 6 week study plan 🌟':
         bot.send_document(message.chat.id, open('6 week study plan.pdf', 'rb'))
     elif message.text == 'Запись на speaking club SAYra':
+        if not is_authenticated(message):
+            msg = bot.send_message(message.chat.id, '*Пожалуйста зарегистрируйтесь!*', parse_mode='Markdown')
+            msg = bot.send_message(message.chat.id, 'Напишите ваше имя: ')
+            bot.register_next_step_handler(msg, getFirstName)
+            return
         options = types.ReplyKeyboardMarkup(row_width=2)
         btns = {}
 
@@ -121,6 +122,7 @@ def user(message):
         options.row(back)
         msg = bot.send_message(message.chat.id, 'Выберите удобное для вас время', reply_markup=options)
         bot.register_next_step_handler(msg, registerUserToSpeakingClub, kwargs=btns)
+    
     elif message.text == 'Выйти с панели администратора':
         if not is_admin(message):
             bot.send_message(message.chat.id, "You don't have permission to run this command")
@@ -138,60 +140,33 @@ def user(message):
         if not is_admin(message):
             bot.send_message(message.chat.id, "You don't have permission to run this command")
             return
-        bot.send_message(message.chat.id, 'В разработке')
-
-def registerUserToSpeakingClub(message, **kwargs:dict):
-    usersTelegram = f'@{message.from_user.username}'
-    if has_group(usersTelegram):
-       bot.send_message(message.chat.id, 'You are already registered to speaking club') 
-       return
-    text = message.text
-    course = kwargs['kwargs'][text]
-    Database.registerUserToGroup(telegram=usersTelegram, group_id=course['grou_id'])
-    bot.send_message(message.chat.id, f'Вы успешно зарегистрировались на спикинг клаб\nС нетерпением ждем вас в {course["time"]}')
-    return
-
-
-def check_essay(message):
-    if message.content_type == 'text':
-        text = message.text
-        analyzing_message = bot.send_message(message.chat.id, 'Analyzing essay...')
-        user_messages = [{"role": "user", "content": text + "\n You should highlight the candidate's shortcomings and strong qualities, "
-                                                           "make suggestions for improvement, and provide an honest IELTS Writing score."}]
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=user_messages
-        )
-        reply = response["choices"][0]["message"]["content"]
-        bot.edit_message_text(chat_id=message.chat.id, message_id=analyzing_message.message_id, text=reply)
-    elif message.content_type == 'photo':
-        analyzing_message = bot.send_message(message.chat.id, 'Analyzing essay...')
-        file_id = message.photo[-1].file_id
-        file_info = bot.get_file(file_id)
-        file = bot.download_file(file_info.file_path)
-
-        with open('temp_essay.jpg', 'wb') as f:
-            f.write(file)
-
-        detected_text = detect_text('temp_essay.jpg')
-        
-        print(detected_text)
-
-        os.remove('temp_essay.jpg')
-
-        messages.append({"role": "user", "content": detected_text + "\n You should highlight the candidate's shortcomings and strong qualities, "
-                                                        "make suggestions for improvement, and provide an honest IELTS Writing score."})
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=messages)
-        reply = response["choices"][0]["message"]["content"]
-        messages.append({"role": "assistant", "content": reply})
-
-        bot.edit_message_text(chat_id=message.chat.id, message_id=analyzing_message.message_id, text=reply)
-
-
-
-
+        listOfUsers = Database.getAllUsersRegisteredSpeakingClub()
+        if listOfUsers:
+            botsendmessage = '*Список людей зарегистрированных на спикинг клаб:*\n'
+            for i in listOfUsers:
+                ms =    f"{i['telegram']}\n"\
+                        f"Day: {i['day of the week']}\n"\
+                        f"Time: {i['time']}\n\n"
+                botsendmessage += ms
+            bot.send_message(message.chat.id, botsendmessage, parse_mode='Markdown')
+        else:
+            bot.send_message(message.chat.id, 'No users', parse_mode='Markdown')
+    elif message.text == 'Проверить вопросы по курсу IELTS':
+        if not is_admin(message):
+            bot.send_message(message.chat.id, "You don't have permission to run this command")
+            return
+        listOfQuestions = Database.getAllQuestionsAboutIelts()
+        if listOfQuestions:
+            botsendmessage = '*Список вопросов по курсу IELTS:*\n'
+            for i in listOfQuestions:
+                ms =    f"{i['user']}\n"\
+                        f"Subject: {i['question_subject']}\n"\
+                        f"Question: {i['question']}\n"\
+                        f"Date: {i['date']}\n\n"
+                botsendmessage += ms
+            bot.send_message(message.chat.id, botsendmessage, parse_mode='Markdown')
+        else:
+            bot.send_message(message.chat.id, 'No questions', parse_mode='Markdown')
 
 bot.polling(none_stop=True)
 
